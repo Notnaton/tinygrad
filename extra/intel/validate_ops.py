@@ -34,19 +34,21 @@ def make_op_sink(op:Ops) -> UOp:
   else: value = inputs[0].alu(op, *inputs[1:arity])
   return UOp(Ops.SINK, src=(output.index(index).store(value),), arg=KernelInfo(name=f"intel_{op.name.lower()}"))
 
+def describe_program(program) -> dict:
+  source, zebin = program.src[2].arg, program.src[3].arg
+  image = load_zebin(zebin, program.arg.function_name)
+  return {"kernel_name":program.arg.function_name, "source_sha256":hashlib.sha256(source.encode()).hexdigest(),
+          "zebin_size":len(zebin), "zebin_sha256":hashlib.sha256(zebin).hexdigest(), "code_size":len(image.code),
+          "code_sha256":hashlib.sha256(image.code).hexdigest(), "metadata":asdict(image.metadata),
+          "relocations":[asdict(reloc) for reloc in image.relocations]}
+
 def compile_ops(compiler:IntelOclocCompiler) -> dict:
   renderer = IntelOpenCLRenderer(Target(device="INTEL", arch="xe2"), compiler)
   kernels = []
   for op in sorted(GroupOp.ALU, key=lambda item:item.value):
     program = to_program(make_op_sink(op), renderer)
-    source, zebin = program.src[2].arg, program.src[3].arg
-    image = load_zebin(zebin, program.arg.function_name)
     lowered = sorted({uop.op.name for uop in program.src[1].src if uop.op in GroupOp.ALU})
-    kernels.append({"requested_op":op.name, "lowered_ops":lowered, "kernel_name":program.arg.function_name,
-                    "source_sha256":hashlib.sha256(source.encode()).hexdigest(), "zebin_size":len(zebin),
-                    "zebin_sha256":hashlib.sha256(zebin).hexdigest(), "code_size":len(image.code),
-                    "code_sha256":hashlib.sha256(image.code).hexdigest(), "metadata":asdict(image.metadata),
-                    "relocations":[asdict(reloc) for reloc in image.relocations]})
+    kernels.append({"requested_op":op.name, "lowered_ops":lowered, **describe_program(program)})
   return {"schema":1, "device":compiler.device, "ocloc_version":compiler.version, "alu_op_count":len(GroupOp.ALU), "kernels":kernels}
 
 def main() -> int:

@@ -1,5 +1,6 @@
 import unittest
 from extra.intel.validate_ops import make_op_sink
+from extra.intel.validate_programs import make_structural_cases
 from tinygrad.codegen import to_program
 from tinygrad.device import Compiler
 from tinygrad.helpers import Target
@@ -19,6 +20,14 @@ class TestIntelOpCoverage(unittest.TestCase):
     for op in GroupOp.ALU:
       with self.subTest(op=op):
         program = to_program(make_op_sink(op), renderer)
+        self.assertIn("__kernel void", program.src[2].arg)
+        self.assertEqual(program.src[3].arg, program.src[2].arg.encode())
+
+  def test_structural_cases_reach_opencl_source(self):
+    renderer = IntelOpenCLRenderer(Target(device="INTEL", arch="xe2"), Compiler())
+    for case, sink in make_structural_cases().items():
+      with self.subTest(case=case):
+        program = to_program(sink, renderer)
         self.assertIn("__kernel void", program.src[2].arg)
         self.assertEqual(program.src[3].arg, program.src[2].arg.encode())
 

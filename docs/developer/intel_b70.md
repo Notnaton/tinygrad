@@ -181,6 +181,21 @@ and loader check, not a numerical result check; once hardware is available the
 same cases should execute against CPU reference values and become the initial
 native-Xe2 renderer conformance suite.
 
+Structural kernels can be compiled, loaded, and passed through mock walker
+construction with:
+
+```sh
+python extra/intel/validate_programs.py \
+  --ocloc /usr/bin/ocloc-26.18.1 \
+  --manifest /tmp/intel-bmg-programs.json
+```
+
+The cases cover casts/bitcasts, a reduction loop with conditional control flow,
+gated global loads, and grouped local-memory reduction.  With the pinned
+compiler the two reduction cases request respectively 64 and 512 bytes of SLM,
+one barrier, and one or two local-ID channels.  The validator records both
+Zebin details and the serialized mock batch for each case.
+
 ### Golden kernel comparison
 
 The branch includes small OpenCL C add, copy, and naïve matrix-multiply kernels
