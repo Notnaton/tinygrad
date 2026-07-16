@@ -47,13 +47,17 @@ def compile_goldens(args:argparse.Namespace) -> dict[str, Any]:
     command = [compiler, "compile", "-file", str(source), "-device", args.device, "-output", source.stem,
                "-out_dir", str(output), "-output_no_suffix", "-exclude_ir", "--format", "zebin",
                "-options", "-cl-std=CL2.0"]
-    subprocess.run(command, check=True)
+    try: subprocess.run(command, check=True)
+    except subprocess.CalledProcessError as error:
+      raise RuntimeError(f"ocloc failed while compiling {source.name} for {args.device!r} (exit {error.returncode}). If it reported "
+                         f"'Cannot get HW Info', this ocloc is too old for {args.device}; install a newer intel-ocloc/IGC pair") from error
     binary = output / f"{source.stem}.bin"
     if not binary.is_file(): raise RuntimeError(f"ocloc did not create expected output {binary}")
     commands.append(["ocloc", "compile", "-file", str(source.relative_to(ROOT)), "-device", args.device, "-output", source.stem,
                      "-out_dir", "<OUTPUT>", "-output_no_suffix", "-exclude_ir", "--format", "zebin", "-options", "-cl-std=CL2.0"])
     binaries.append(describe_zebin(binary))
-  version = subprocess.run([compiler, "--version"], check=True, capture_output=True, text=True).stdout.strip()
+  version_result = subprocess.run([compiler, "--version"], capture_output=True, text=True)
+  version = version_result.stdout.strip() if version_result.returncode == 0 else "unknown"
   return {"schema":1, "device":args.device, "ocloc_version":version, "commands":commands, "binaries":binaries}
 
 def differences(expected:Any, actual:Any, path:str="") -> list[str]:
@@ -88,6 +92,8 @@ def main() -> int:
   if args.command == "compile": result = compile_goldens(args)
   elif args.command == "inspect": result = {"schema":1, "binaries":[describe_zebin(path) for path in args.zebin]}
   else:
+    if not args.expected.is_file(): raise RuntimeError(f"expected manifest does not exist: {args.expected}")
+    if not args.actual.is_file(): raise RuntimeError(f"actual manifest does not exist: {args.actual}; the compile step must succeed first")
     diff = differences(json.loads(args.expected.read_text()), json.loads(args.actual.read_text()))
     if diff:
       print("\n".join(diff))
