@@ -12,7 +12,9 @@
             "grf_count": 128,
             "has_dpas": false,
             "inline_data_payload_size": 32,
+            "local_id_channels": 1,
             "name": "add_f32",
+            "offset_to_skip_per_thread_data_load": 128,
             "payload_arguments": [
               {
                 "access_type": "",
@@ -98,7 +100,9 @@
             "grf_count": 128,
             "has_dpas": false,
             "inline_data_payload_size": 32,
+            "local_id_channels": 1,
             "name": "copy_u8",
+            "offset_to_skip_per_thread_data_load": 128,
             "payload_arguments": [
               {
                 "access_type": "",
@@ -175,7 +179,9 @@
             "grf_count": 128,
             "has_dpas": false,
             "inline_data_payload_size": 32,
+            "local_id_channels": 2,
             "name": "matmul_f32",
+            "offset_to_skip_per_thread_data_load": 128,
             "payload_arguments": [
               {
                 "access_type": "",

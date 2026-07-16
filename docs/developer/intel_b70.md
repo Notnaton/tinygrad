@@ -97,15 +97,21 @@ allocator, a strict parser for the IGC Zebin `.ze_info` subset, `.text.<kernel>`
 extraction, and a versioned tinygrad Intel program container.  Its metadata
 tracks SIMD width, GRF count/large-GRF mode, SLM, barriers, DPAS use,
 cross-thread arguments, per-thread payload size, inline payload size, and the
-actual kernel start offset.  Synthetic ELF fixtures exercise the loader without
-depending on IGC at test time.
+actual and per-thread-skip kernel start offsets.  It also parses and validates
+text relocations instead of passing Intel ELF relocation types to the generic
+host linker.  Synthetic ELF fixtures exercise the loader without depending on
+IGC at test time.
 
 An opt-in `DEV=MOCK+INTEL` HCQ skeleton now joins these pieces.  It allocates
 mock buffers at GPU virtual addresses, lays out pointer and scalar kernel
 arguments, uploads kernel code, emits the Xe2 compute-state and walker packets,
-captures serialized batches, and models timeline completion.  Plain `INTEL`
-deliberately fails because no real interface exists yet.  The mock does not
-execute EU instructions and is not evidence that the packets run on silicon.
+captures serialized batches, and models timeline completion.  Genuine BMG
+Zebins additionally exercise implicit dimension patching, the 32-byte inline
+cross-thread prefix, aligned indirect cross-thread data, and hardware local-ID
+generation with the compiler's per-thread-load prologue skipped.  Plain
+`INTEL` deliberately fails because no real interface exists yet.  The mock
+does not execute EU instructions and is not evidence that the packets run on
+silicon.
 
 ## Kernel binary and command-stream options
 
@@ -129,6 +135,29 @@ definition.
 The first kernel should be a hand-inspected SIMD kernel doing one global load,
 one add, and one global store.  XMX support should come only after scalar/vector
 dispatch, barriers, local memory, and copy queues are stable.
+
+### tinygrad operation coverage
+
+At the pinned tinygrad revision `Ops` has 82 members, but this is not the number
+of machine operations an Intel renderer needs: it includes tensor graph,
+scheduler, container, and HCQ-only IR.  `GroupOp.ALU` currently contains 28
+elementwise operations (the older count of 26 predates `FLOORDIV` and
+`FLOORMOD`).
+
+The offline OpenCL/IGC path can use tinygrad's standard decomposition rules:
+
+| Lowering class | tinygrad operations |
+|---|---|
+| Direct OpenCL expression/builtin | `EXP2`, `LOG2`, `SIN`, `SQRT`, `RECIPROCAL`, `NEG`, `TRUNC`, `ADD`, `MUL`, `SHL`, `SHR`, `CDIV`, `CMOD`, `CMPLT`, `CMPNE`, `CMPEQ`, `XOR`, `OR`, `AND`, `SUB`, `WHERE` |
+| Decomposed before rendering | `MAX`, `THREEFRY`, `FDIV`, `POW`, `FLOORDIV`, `FLOORMOD`, `MULACC` |
+
+All 28 therefore need semantic tests even though only 21 need a direct OpenCL
+spelling.  A future native Xe2 renderer additionally needs the lowered program
+IR for parameters/constants, work-item IDs, casts/bitcasts, global and local
+index/load/store, ranges and conditionals, barriers, and eventually `WMMA` for
+XMX.  The first correctness milestone excludes `WMMA`, exotic image operations,
+atomics, and custom inline instructions; each must fail closed until its ABI and
+encoding are implemented.
 
 ### Golden kernel comparison
 
@@ -164,10 +193,12 @@ The manifest pins complete-Zebin and extracted-code hashes so later compiler or
 tinygrad output can be compared exactly.
 
 These Zebins also contain Intel relocation records such as
-`__INTEL_PATCH_CROSS_THREAD_OFFSET_OFF_R0`.  The loader now reads sections
-without incorrectly resolving them as host symbols, but applying those Intel
-patch relocations is still required before a real dispatch.  Tests therefore
-compare and inspect the genuine code while execution remains fail-closed.
+`__INTEL_PATCH_CROSS_THREAD_OFFSET_OFF_R0`.  The loader now decodes and
+validates those records.  Compute-runtime only patches these sites with the
+aligned implicit-argument structure size when a kernel actually requires that
+structure; the checked-in ordinary OpenCL kernels do not, so their two 32-bit
+immediates correctly remain zero.  Unknown text relocation symbols and types
+fail closed.
 
 #### Installing the pinned compiler
 
@@ -278,12 +309,15 @@ remain isolated because B70 is not listed as G21.
   generated definitions.
 - [x] Define a compact program container for machine code, SIMD width, GRF count,
   SLM size, cross-thread data, and implicit arguments.
+- [x] Load genuine BMG Zebins through mock dispatch, including Intel relocation
+  validation, inline/indirect cross-thread payload placement, and hardware local
+  ID generation.
 
 Phase 0 is a testable structural prototype.  Before calling it complete for
 hardware bring-up, add missing real-queue commands such as semaphore waits,
-validate inline cross-thread payload placement and the full command prologue
-against an IGC-produced BMG kernel, and decide which implicit `.ze_info`
-argument kinds the first tinygrad renderer needs.
+validate the full command prologue against a compute-runtime capture, and decide
+which additional implicit `.ze_info` argument kinds the first tinygrad renderer
+needs.
 
 ### Phase 1: kernel-assisted hardware bring-up
 
@@ -317,7 +351,8 @@ argument kinds the first tinygrad renderer needs.
 - whether all 32 Xe cores reside on one GT and how they map to CCS engines;
 - Resizable BAR behavior and the CPU-visible VRAM aperture on target systems;
 - B70-specific workarounds absent from public G21 documentation; and
-- exact kernel metadata required by IGC output for a raw `COMPUTE_WALKER`.
+- cache policy, arbitration, and remaining command-prologue fields needed for a
+  raw `COMPUTE_WALKER` on the shipping stepping.
 
 No code should hard-code answers to these.  Add probe dumps and fail closed
 when a queried topology or revision is unsupported.

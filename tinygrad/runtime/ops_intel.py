@@ -33,6 +33,10 @@ class IntelAllocator(HCQAllocator['IntelDevice']):
 class IntelArgsState(HCQArgsState['IntelProgram']):
   def __init__(self, buf:HCQBuffer, prg:IntelProgram, bufs:tuple[HCQBuffer, ...], vals:tuple[sint|None, ...]=()):
     super().__init__(buf, prg, bufs, vals)
+    if int(buf.va_addr) & 63: raise ValueError("Intel kernel arguments must be 64-byte aligned")
+    payload_span = round_up(max(prg.metadata.cross_thread_data_size, 1), 64)
+    if buf.size < payload_span * 2: raise ValueError("Intel kernel argument allocation has no indirect payload space")
+    self.indirect_buf = buf.offset(payload_span, payload_span)
     buf.cpu_view().view(fmt='B')[:] = bytes(buf.size)
     buf_index, val_index = 0, 0
     for arg in prg.metadata.payload_arguments:
@@ -56,9 +60,14 @@ class IntelProgram(HCQProgram['IntelDevice']):
     self.code = dev.allocator.alloc(round_up(len(self.image.code), 0x1000), BufferSpec(nolru=True))
     dev.allocator._copyin(self.code, memoryview(self.image.code))
     self.instruction_base, self.kernel_start = int(self.code.va_addr), self.metadata.actual_kernel_start_offset
-    kernargs_size = round_up(max(self.metadata.cross_thread_data_size, self.metadata.inline_data_payload_size, 1), 64)
+    kernargs_size = round_up(max(self.metadata.cross_thread_data_size, self.metadata.inline_data_payload_size, 1), 64) * 2
     super().__init__(IntelArgsState, dev, name, kernargs_alloc_size=kernargs_size, lib=lib, base=self.instruction_base)
     weakref.finalize(self, self._fini, dev, self.code, BufferSpec(nolru=True))
+
+  def fill_kernargs(self, bufs:tuple[HCQBuffer, ...], vals:tuple[int|None, ...]=(), kernargs:HCQBuffer|None=None) -> IntelArgsState:
+    argsbuf = kernargs or self.dev.kernargs_buf.offset(
+      offset=self.dev.kernargs_offset_allocator.alloc(self.kernargs_alloc_size, 64), size=self.kernargs_alloc_size)
+    return IntelArgsState(argsbuf, self, bufs, vals)
 
 class IntelComputeQueue(HWQueue[HCQSignal, 'IntelDevice', IntelProgram, IntelArgsState]):
   def __init__(self):
@@ -88,18 +97,39 @@ class IntelComputeQueue(HWQueue[HCQSignal, 'IntelDevice', IntelProgram, IntelArg
   def exec(self, prg:IntelProgram, args_state:IntelArgsState, global_size:tuple[sint, ...], local_size:tuple[sint, ...]):
     if not all(isinstance(x, int) for x in (*global_size, *local_size)): raise ValueError("symbolic Intel mock dispatch sizes are not implemented")
     if len(global_size) != 3 or len(local_size) != 3: raise ValueError("Intel dispatch sizes must have three dimensions")
-    if prg.metadata.inline_data_payload_size:
-      raise NotImplementedError("Intel inline cross-thread payload placement requires hardware validation")
+    required = prg.metadata.required_work_group_size
+    if required != (0, 0, 0) and tuple(local_size) != required:
+      raise ValueError(f"Intel kernel requires local size {required}, got {tuple(local_size)}")
     self.bind_args_state(args_state)
+    for arg in prg.metadata.payload_arguments:
+      if arg.arg_type == "global_id_offset": values = (0, 0, 0)
+      elif arg.arg_type in ("local_size", "enqueued_local_size"): values = tuple(local_size)
+      elif arg.arg_type == "global_size": values = tuple(g*l for g, l in zip(global_size, local_size))
+      elif arg.arg_type == "group_count": values = tuple(global_size)
+      elif arg.arg_type == "work_dimensions": values = (3,)
+      elif arg.arg_type in ("arg_bypointer", "arg_byvalue") or arg.size == 0: continue
+      else: raise ValueError(f"unsupported Intel implicit payload argument {arg.arg_type!r}")
+      if arg.size != 4 * len(values): raise ValueError(f"invalid size for Intel {arg.arg_type} payload")
+      dst = args_state.buf.cpu_view().view(offset=arg.offset, size=arg.size, fmt='I')
+      for i, value in enumerate(values): dst[i] = value
+
+    cross_thread_size = prg.metadata.cross_thread_data_size
+    inline_size = min(prg.metadata.inline_data_payload_size, cross_thread_size, 32)
+    cross_thread = bytes(args_state.buf.cpu_view().view(size=cross_thread_size, fmt='B'))
+    inline_data, indirect_data = cross_thread[:inline_size], cross_thread[inline_size:]
+    if indirect_data: args_state.indirect_buf.cpu_view().view(size=len(indirect_data), fmt='B')[:] = indirect_data
     dynamic_base = int(prg.dev.kernargs_buf.va_addr)
-    indirect_length = prg.metadata.cross_thread_data_size
-    indirect_start = int(args_state.buf.va_addr)-dynamic_base if indirect_length else 0
+    indirect_length = len(indirect_data)
+    indirect_start = int(args_state.indirect_buf.va_addr)-dynamic_base if indirect_length else 0
+    generate_local_ids = prg.metadata.local_id_channels > 0
+    kernel_start = prg.kernel_start + (prg.metadata.offset_to_skip_per_thread_data_load if generate_local_ids else 0)
     self.commands.emit(cfe_state(maximum_threads=512, large_grf_thread_adjust_disable=prg.metadata.large_grf))
     self.commands.emit(state_base_address(dynamic=dynamic_base, instruction=prg.instruction_base,
       dynamic_size_pages=math.ceil(prg.dev.kernargs_buf.size/0x1000), instruction_size_pages=math.ceil(prg.code.size/0x1000)))
-    self.commands.emit(compute_walker(kernel_start=prg.kernel_start, group_count=tuple(global_size), local_size=tuple(local_size),
+    self.commands.emit(compute_walker(kernel_start=kernel_start, group_count=tuple(global_size), local_size=tuple(local_size),
       simd_size=prg.metadata.simd_size, indirect_data_start=indirect_start, indirect_data_length=indirect_length,
-      slm_size=prg.metadata.slm_size, barrier_count=prg.metadata.barrier_count))
+      slm_size=prg.metadata.slm_size, barrier_count=prg.metadata.barrier_count, inline_data=inline_data,
+      generate_local_ids=generate_local_ids, emit_local=(1 << prg.metadata.local_id_channels)-1 if generate_local_ids else 0))
     return self
 
   def _submit(self, dev:IntelDevice):

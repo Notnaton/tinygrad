@@ -62,6 +62,7 @@ class TestIntelProgram(unittest.TestCase):
     meta, = parse_ze_info(fixture.read_text())
     self.assertEqual((meta.name, meta.simd_size, meta.grf_count), ("test", 32, 128))
     self.assertEqual((meta.inline_data_payload_size, meta.per_thread_payload_size), (32, 192))
+    self.assertEqual(meta.local_id_channels, 3)
     self.assertEqual(meta.cross_thread_data_size, 92)
     stateful, stateless = meta.payload_arguments[2:4]
     self.assertEqual((stateful.size, stateful.addrmode), (0, "stateful"))
@@ -74,6 +75,7 @@ class TestIntelProgram(unittest.TestCase):
     self.assertEqual(meta.required_work_group_size, (8, 4, 1))
     self.assertEqual(meta.cross_thread_data_size, 20)
     self.assertEqual(meta.per_thread_payload_size, 192)
+    self.assertEqual(meta.local_id_channels, 3)
     self.assertTrue(meta.large_grf)
     self.assertTrue(meta.has_dpas)
     self.assertEqual(meta.payload_arguments[0].addrspace, "global")
