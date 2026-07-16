@@ -358,8 +358,10 @@ needs.
 
 ### Phase 1: kernel-assisted hardware bring-up
 
-- Add `XeKmdIface`, enumerate render nodes by PCI ID, and reject non-`xe`
-  devices with actionable diagnostics.
+- [x] Add read-only Xe render-node discovery and stable CONFIG, ENGINES, and
+  MEMORY_REGIONS query wrappers; reject non-`xe` devices.
+- Extend the query wrapper into `XeKmdIface` allocation, VM-bind, execution,
+  synchronization, and cleanup.
 - Validate query, allocation/mmap, VM bind/unbind, and a no-op batch.
 - Compile and dispatch add/copy kernels, then implement HCQ compute/copy queues.
 - Add fault reporting using `devcoredump`, debugfs, and user-fence timeouts.
@@ -393,6 +395,17 @@ needs.
 
 No code should hard-code answers to these.  Add probe dumps and fail closed
 when a queried topology or revision is unsupported.
+
+Once a B70 is installed with the Linux `xe` driver, the first safe data capture
+is read-only:
+
+```sh
+python extra/intel/query_xe.py > /tmp/b70-xe-query.json
+```
+
+This records the render node, PCI device/revision, VA width and alignment,
+engine placements, and VRAM/system-memory regions.  It does not create a VM,
+allocate memory, or submit GPU commands.
 
 ## Primary sources reviewed
 
