@@ -148,10 +148,10 @@ The offline OpenCL/IGC path can use tinygrad's standard decomposition rules:
 
 | Lowering class | tinygrad operations |
 |---|---|
-| Direct OpenCL expression/builtin | `EXP2`, `LOG2`, `SIN`, `SQRT`, `RECIPROCAL`, `NEG`, `TRUNC`, `ADD`, `MUL`, `SHL`, `SHR`, `CDIV`, `CMOD`, `CMPLT`, `CMPNE`, `CMPEQ`, `XOR`, `OR`, `AND`, `SUB`, `WHERE` |
-| Decomposed before rendering | `MAX`, `THREEFRY`, `FDIV`, `POW`, `FLOORDIV`, `FLOORMOD`, `MULACC` |
+| Direct OpenCL expression/builtin | `EXP2`, `LOG2`, `SIN`, `SQRT`, `RECIPROCAL`, `NEG`, `TRUNC`, `ADD`, `MUL`, `SHL`, `SHR`, `CDIV`, `CMOD`, `CMPLT`, `CMPNE`, `CMPEQ`, `XOR`, `OR`, `AND`, `SUB`, `FDIV`, `WHERE`, `MULACC` |
+| Decomposed before rendering | `MAX`, `THREEFRY`, `POW`, `FLOORDIV`, `FLOORMOD` |
 
-All 28 therefore need semantic tests even though only 21 need a direct OpenCL
+All 28 therefore need semantic tests even though only 23 need a direct OpenCL
 spelling.  A future native Xe2 renderer additionally needs the lowered program
 IR for parameters/constants, work-item IDs, casts/bitcasts, global and local
 index/load/store, ranges and conditionals, barriers, and eventually `WMMA` for
@@ -165,6 +165,21 @@ offline IGC for `-device bmg` and returns Zebin directly to `IntelProgram`.
 `INTEL_OCLOC=/absolute/path/to/ocloc-26.18.1` selects an exact installation.
 This makes ordinary tinygrad programs compile and traverse mock submission, but
 the mock intentionally does not fabricate output values.
+
+Compile a one-element tinygrad kernel for every current ALU UOp and record the
+rendered-source, complete-Zebin, extracted-code, metadata, and relocation hashes
+with:
+
+```sh
+python extra/intel/validate_ops.py \
+  --ocloc /usr/bin/ocloc-26.18.1 \
+  --manifest /tmp/intel-bmg-ops.json
+```
+
+The pinned toolchain currently compiles all 28 cases.  This corpus is a compiler
+and loader check, not a numerical result check; once hardware is available the
+same cases should execute against CPU reference values and become the initial
+native-Xe2 renderer conformance suite.
 
 ### Golden kernel comparison
 
