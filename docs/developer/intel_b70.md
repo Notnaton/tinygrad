@@ -83,6 +83,15 @@ tests without a card: ctypes layout checks against the C header, serialized
 ioctl fixtures, engine/memory query parsing, VA allocation, command packet
 goldens, and mock submission.
 
+The current `intel-b70` branch implements the first hardware-independent
+checkpoint: the stable submission-related Xe UAPI structures, B70 product
+identification, query parsing and request builders, Xe2 encoders for
+`STATE_BASE_ADDRESS`, `CFE_STATE`, `COMPUTE_WALKER`, `PIPE_CONTROL`, and
+`MI_BATCH_BUFFER_END`, plus a stateful mock that exercises query, VM creation,
+GEM creation, VM binding, compute-queue creation, fenced execution, and batch
+termination.  The packet goldens are pinned to the compute-runtime revision
+listed under Primary sources.
+
 ## Kernel binary and command-stream options
 
 There are three practical compiler stages:
