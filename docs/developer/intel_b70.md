@@ -169,6 +169,29 @@ without incorrectly resolving them as host symbols, but applying those Intel
 patch relocations is still required before a real dispatch.  Tests therefore
 compare and inspect the genuine code while execution remains fail-closed.
 
+#### Installing the pinned compiler
+
+`ocloc` is an Intel compute-runtime tool and is not installed with tinygrad.
+For Ubuntu 24.04, the exact packages used for the checked-in goldens can be
+installed from Intel's GitHub releases:
+
+```sh
+mkdir -p /tmp/intel-ocloc && cd /tmp/intel-ocloc
+wget https://github.com/intel/intel-graphics-compiler/releases/download/v2.34.4/intel-igc-core-2_2.34.4+21428_amd64.deb
+wget https://github.com/intel/intel-graphics-compiler/releases/download/v2.34.4/intel-igc-opencl-2_2.34.4+21428_amd64.deb
+wget https://github.com/intel/compute-runtime/releases/download/26.18.38308.1/intel-ocloc_26.18.38308.1-0_amd64.deb
+sudo apt install ./intel-igc-core-2_2.34.4+21428_amd64.deb \
+  ./intel-igc-opencl-2_2.34.4+21428_amd64.deb \
+  ./intel-ocloc_26.18.38308.1-0_amd64.deb
+ocloc --version
+```
+
+Some packages expose only a versioned executable such as `ocloc-26.18.1`.
+The comparison script discovers those under `/usr/bin` and `/usr/local/bin`, or
+an explicit path can be supplied with `--ocloc`.  Other distributions should
+use equivalent packages or a locally built compute-runtime/IGC pair; comparing
+their manifest with the pinned one will show any output differences.
+
 ## Details from `llm-scaler` and `compute-runtime`
 
 Intel's `llm-scaler` is useful as a workload and compiler-tuning reference, but

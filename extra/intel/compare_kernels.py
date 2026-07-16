@@ -11,6 +11,14 @@ from tinygrad.runtime.support.elf import elf_sections  # noqa: E402
 from tinygrad.runtime.support.intel_program import load_zebin, parse_ze_info  # noqa: E402
 
 DEFAULT_SOURCES = ROOT / "test/intel/kernels"
+PINNED_OCLOC_VERSION = "26.18.38308.1"
+
+def find_ocloc(requested:str) -> str|None:
+  if compiler:=shutil.which(requested): return compiler
+  if requested != "ocloc": return None
+  candidates = [*pathlib.Path("/usr/bin").glob("ocloc-*"), *pathlib.Path("/usr/local/bin").glob("ocloc-*"),
+                pathlib.Path("/opt/intel/oneapi/compiler/latest/bin/ocloc")]
+  return str(next((path for path in sorted(candidates, reverse=True) if path.is_file()), "")) or None
 
 def describe_zebin(path:pathlib.Path) -> dict[str, Any]:
   raw = path.read_bytes()
@@ -26,8 +34,10 @@ def describe_zebin(path:pathlib.Path) -> dict[str, Any]:
   return {"file":path.name, "zebin_size":len(blob), "zebin_sha256":hashlib.sha256(blob).hexdigest(), "kernels":kernels}
 
 def compile_goldens(args:argparse.Namespace) -> dict[str, Any]:
-  compiler = shutil.which(args.ocloc)
-  if compiler is None: raise RuntimeError(f"{args.ocloc!r} was not found; install Intel compute-runtime's ocloc")
+  compiler = find_ocloc(args.ocloc)
+  if compiler is None:
+    raise RuntimeError(f"{args.ocloc!r} was not found. Install Intel compute-runtime's ocloc {PINNED_OCLOC_VERSION} to reproduce the checked-in "
+                       "goldens, or pass --ocloc /path/to/ocloc[-VERSION]. See docs/developer/intel_b70.md#installing-the-pinned-compiler")
   output = pathlib.Path(args.output)
   output.mkdir(parents=True, exist_ok=True)
   sources = sorted(pathlib.Path(args.sources).glob("*.cl"))
@@ -89,4 +99,8 @@ def main() -> int:
   else: sys.stdout.write(rendered)
   return 0
 
-if __name__ == "__main__": raise SystemExit(main())
+if __name__ == "__main__":
+  try: raise SystemExit(main())
+  except RuntimeError as error:
+    print(f"error: {error}", file=sys.stderr)
+    raise SystemExit(2) from None
