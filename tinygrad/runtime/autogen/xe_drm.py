@@ -8,6 +8,13 @@ from tinygrad.runtime.support.c import _IOW, _IOWR
 from tinygrad.runtime.support import c
 
 @c.record
+class struct_drm_gem_close(c.Struct):
+  SIZE = 8
+  handle: int
+  pad: int
+struct_drm_gem_close.register_fields([('handle', ctypes.c_uint32, 0), ('pad', ctypes.c_uint32, 4)])
+
+@c.record
 class struct_drm_xe_engine_class_instance(c.Struct):
   SIZE = 8
   engine_class: int
@@ -257,6 +264,7 @@ DRM_XE_UFENCE_WAIT_OP_GTE, DRM_XE_UFENCE_WAIT_OP_LT, DRM_XE_UFENCE_WAIT_OP_LTE =
 DRM_XE_UFENCE_WAIT_FLAG_ABSTIME = 1 << 0
 
 DRM_IOCTL_BASE, DRM_COMMAND_BASE = 'd', 0x40
+DRM_IOCTL_GEM_CLOSE = _IOW(DRM_IOCTL_BASE, 0x09, struct_drm_gem_close)
 DRM_IOCTL_XE_DEVICE_QUERY = _IOWR(DRM_IOCTL_BASE, DRM_COMMAND_BASE + DRM_XE_DEVICE_QUERY, struct_drm_xe_device_query)
 DRM_IOCTL_XE_GEM_CREATE = _IOWR(DRM_IOCTL_BASE, DRM_COMMAND_BASE + DRM_XE_GEM_CREATE, struct_drm_xe_gem_create)
 DRM_IOCTL_XE_GEM_MMAP_OFFSET = _IOWR(DRM_IOCTL_BASE, DRM_COMMAND_BASE + DRM_XE_GEM_MMAP_OFFSET, struct_drm_xe_gem_mmap_offset)

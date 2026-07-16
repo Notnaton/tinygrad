@@ -86,6 +86,11 @@ def make_vm_bind(vm_id:int, obj:int, addr:int, size:int, *, obj_offset:int=0, pa
                                        op=xe_drm.DRM_XE_VM_BIND_OP_MAP, flags=flags)
   return xe_drm.struct_drm_xe_vm_bind(vm_id=vm_id, num_binds=1, bind=op)
 
+def make_vm_unbind(vm_id:int, addr:int, size:int, *, flags:int=0) -> xe_drm.struct_drm_xe_vm_bind:
+  if size <= 0: raise ValueError("Xe VM unbind size must be positive")
+  op = xe_drm.struct_drm_xe_vm_bind_op(range=size, addr=addr, op=xe_drm.DRM_XE_VM_BIND_OP_UNMAP, flags=flags)
+  return xe_drm.struct_drm_xe_vm_bind(vm_id=vm_id, num_binds=1, bind=op)
+
 def make_exec_queue(vm_id:int, engines:tuple[XeEngine, ...]) -> tuple[xe_drm.struct_drm_xe_exec_queue_create, ctypes.Array]:
   if not engines: raise ValueError("Xe exec queue needs at least one engine placement")
   instances = (xe_drm.struct_drm_xe_engine_class_instance * len(engines))(
@@ -103,3 +108,8 @@ def make_exec(exec_queue_id:int, address:int, syncs:tuple[xe_drm.struct_drm_xe_s
   request = xe_drm.struct_drm_xe_exec(exec_queue_id=exec_queue_id, num_syncs=len(syncs),
     syncs=ctypes.addressof(sync_array) if sync_array is not None else 0, address=address, num_batch_buffer=1)
   return request, sync_array
+
+def make_wait_user_fence(addr:int, value:int, timeout_ns:int, *, exec_queue_id:int=0,
+                         op:int=xe_drm.DRM_XE_UFENCE_WAIT_OP_GTE, mask:int=(1 << 64)-1) -> xe_drm.struct_drm_xe_wait_user_fence:
+  if addr & 7: raise ValueError("Xe user fence address must be qword aligned")
+  return xe_drm.struct_drm_xe_wait_user_fence(addr=addr, op=op, value=value, mask=mask, timeout=timeout_ns, exec_queue_id=exec_queue_id)

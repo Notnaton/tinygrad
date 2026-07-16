@@ -33,5 +33,6 @@ class TestXeMockSubmission(unittest.TestCase):
     execute, syncs = make_exec(queue.exec_queue_id, gpu_address, (fence,))
     mock.exec(execute, syncs)
     self.assertEqual(mock.submissions, [(queue.exec_queue_id, gpu_address)])
+    self.assertEqual(fence_storage.value, 0)
 
 if __name__ == "__main__": unittest.main()

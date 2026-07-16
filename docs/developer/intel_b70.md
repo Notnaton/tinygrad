@@ -85,7 +85,9 @@ goldens, and mock submission.
 
 The current `intel-b70` branch implements the first hardware-independent
 checkpoint: the stable submission-related Xe UAPI structures, B70 product
-identification, query parsing and request builders, Xe2 encoders for
+identification, query parsing and request builders, a mock-tested wrapper for
+VM/GEM allocation, CPU mmap, synchronized VM bind/unbind, compute queue
+execution, user-fence waits, and cleanup, plus Xe2 encoders for
 `STATE_BASE_ADDRESS`, `CFE_STATE`, `COMPUTE_WALKER`, `PIPE_CONTROL`, and
 `MI_BATCH_BUFFER_END`, plus a stateful mock that exercises query, VM creation,
 GEM creation, VM binding, compute-queue creation, fenced execution, and batch
@@ -360,9 +362,13 @@ needs.
 
 - [x] Add read-only Xe render-node discovery and stable CONFIG, ENGINES, and
   MEMORY_REGIONS query wrappers; reject non-`xe` devices.
-- Extend the query wrapper into `XeKmdIface` allocation, VM-bind, execution,
-  synchronization, and cleanup.
-- Validate query, allocation/mmap, VM bind/unbind, and a no-op batch.
+- [x] Extend the query wrapper with allocation, mmap, VM-bind, execution,
+  user-fence synchronization, and cleanup operations, initially disconnected
+  from `DEV=INTEL`.
+- [x] Validate query, allocation/mmap, synchronized VM bind/unbind, a no-op
+  batch, and complete cleanup against the stateful mock KMD.
+- Validate the same lifecycle on an Xe2 card and capture the query/output before
+  exposing the wrapper as `XeKmdIface`.
 - Compile and dispatch add/copy kernels, then implement HCQ compute/copy queues.
 - Add fault reporting using `devcoredump`, debugfs, and user-fence timeouts.
 - Validate on B580/B570 if available, then B70.
@@ -406,6 +412,15 @@ python extra/intel/query_xe.py > /tmp/b70-xe-query.json
 This records the render node, PCI device/revision, VA width and alignment,
 engine placements, and VRAM/system-memory regions.  It does not create a VM,
 allocate memory, or submit GPU commands.
+
+The hardware-independent Xe UAPI lifecycle can be rerun now:
+
+```sh
+python -m unittest test.intel.test_xe_abi test.intel.test_intel_kmd -v
+```
+
+It uses a stateful mock render node; passing this test does not submit anything
+to an installed Intel GPU.
 
 ## Primary sources reviewed
 

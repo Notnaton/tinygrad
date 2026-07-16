@@ -1,7 +1,7 @@
 import ctypes, pathlib, shutil, struct, subprocess, tempfile, unittest
 from tinygrad.runtime.autogen import xe_drm
 from tinygrad.runtime.support.intel import (ARC_PRO_B70, ARC_PRO_B70_DEVICE_ID, XeEngine, identify_product, is_battlemage,
-                                            make_exec, make_exec_queue, make_query, make_user_fence, make_vm_bind,
+                                            make_exec, make_exec_queue, make_query, make_user_fence, make_vm_bind, make_vm_unbind, make_wait_user_fence,
                                             parse_query_config, parse_query_engines, parse_query_mem_regions)
 
 class TestXeABI(unittest.TestCase):
@@ -9,7 +9,7 @@ class TestXeABI(unittest.TestCase):
     expected = {
       "struct_drm_xe_engine_class_instance": 8, "struct_drm_xe_engine": 32, "struct_drm_xe_query_engines": 8,
       "struct_drm_xe_mem_region": 88, "struct_drm_xe_query_mem_regions": 8, "struct_drm_xe_query_config": 8,
-      "struct_drm_xe_device_query": 40, "struct_drm_xe_gem_create": 56, "struct_drm_xe_gem_mmap_offset": 40,
+      "struct_drm_gem_close": 8, "struct_drm_xe_device_query": 40, "struct_drm_xe_gem_create": 56, "struct_drm_xe_gem_mmap_offset": 40,
       "struct_drm_xe_vm_create": 32, "struct_drm_xe_vm_destroy": 24, "struct_drm_xe_vm_bind_op": 80,
       "struct_drm_xe_vm_bind": 136, "struct_drm_xe_exec_queue_create": 48, "struct_drm_xe_exec_queue_destroy": 24,
       "struct_drm_xe_sync": 48, "struct_drm_xe_exec": 56, "struct_drm_xe_wait_user_fence": 72,
@@ -21,7 +21,7 @@ class TestXeABI(unittest.TestCase):
     names = [name for name in dir(xe_drm) if name.startswith("struct_drm_xe_")]
     assertions = "\n".join(f'_Static_assert(sizeof(struct {name.removeprefix("struct_")}) == {getattr(xe_drm, name).SIZE}, "{name}");'
                            for name in names)
-    source = f"#include <drm/xe_drm.h>\n{assertions}\nint main(void) {{ return 0; }}\n"
+    source = f'#include <drm/xe_drm.h>\n_Static_assert(sizeof(struct drm_gem_close) == {xe_drm.struct_drm_gem_close.SIZE}, "drm_gem_close");\n{assertions}\nint main(void) {{ return 0; }}\n'
     with tempfile.TemporaryDirectory() as tmp:
       src, out = pathlib.Path(tmp)/"layout.c", pathlib.Path(tmp)/"layout"
       src.write_text(source)
@@ -58,6 +58,8 @@ class TestXeABI(unittest.TestCase):
 
     bind = make_vm_bind(5, 11, 0x100000, 0x10000, obj_offset=0x20000, pat_index=3)
     self.assertEqual((bind.vm_id, bind.num_binds, bind.bind.obj, bind.bind.obj_offset), (5, 1, 11, 0x20000))
+    unbind = make_vm_unbind(5, 0x100000, 0x10000)
+    self.assertEqual((unbind.bind.op, unbind.bind.addr, unbind.bind.range), (xe_drm.DRM_XE_VM_BIND_OP_UNMAP, 0x100000, 0x10000))
 
     queue, instances = make_exec_queue(5, (XeEngine(xe_drm.DRM_XE_ENGINE_CLASS_COMPUTE, 2, 0),))
     self.assertEqual((queue.width, queue.num_placements, queue.instances), (1, 1, ctypes.addressof(instances)))
@@ -67,5 +69,7 @@ class TestXeABI(unittest.TestCase):
     self.assertEqual((execute.exec_queue_id, execute.address, execute.num_syncs), (7, 0x100000, 1))
     self.assertEqual(execute.syncs, ctypes.addressof(syncs))
     with self.assertRaisesRegex(ValueError, "qword aligned"): make_user_fence(3)
+    wait = make_wait_user_fence(0x200000, 4, 1_000_000)
+    self.assertEqual((wait.op, wait.value, wait.timeout), (xe_drm.DRM_XE_UFENCE_WAIT_OP_GTE, 4, 1_000_000))
 
 if __name__ == "__main__": unittest.main()
