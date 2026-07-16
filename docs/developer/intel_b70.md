@@ -159,6 +159,13 @@ XMX.  The first correctness milestone excludes `WMMA`, exotic image operations,
 atomics, and custom inline instructions; each must fail closed until its ABI and
 encoding are implemented.
 
+The branch wires this OpenCL lowering to `IntelOclocCompiler`, which invokes
+offline IGC for `-device bmg` and returns Zebin directly to `IntelProgram`.
+`ocloc-VERSION` executables are preferred over an unversioned distro executable;
+`INTEL_OCLOC=/absolute/path/to/ocloc-26.18.1` selects an exact installation.
+This makes ordinary tinygrad programs compile and traverse mock submission, but
+the mock intentionally does not fabricate output values.
+
 ### Golden kernel comparison
 
 The branch includes small OpenCL C add, copy, and naïve matrix-multiply kernels

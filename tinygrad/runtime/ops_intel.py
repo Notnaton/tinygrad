@@ -6,6 +6,7 @@ from tinygrad.runtime.support.hcq import HCQAllocator, HCQArgsState, HCQBuffer, 
 from tinygrad.runtime.support.intel_program import IntelProgramImage, load_zebin
 from tinygrad.runtime.support.intel_va import IntelVAAllocator
 from tinygrad.runtime.support.intel_xe2 import Xe2CommandBuffer, cfe_state, compute_walker, pipe_control, state_base_address
+from tinygrad.renderer.intel import IntelOpenCLRenderer
 from tinygrad.uop.ops import sint
 
 class MOCKIface:
@@ -53,7 +54,7 @@ class IntelArgsState(HCQArgsState['IntelProgram']):
     if buf_index != len(bufs) or val_index != len(vals): raise ValueError("Intel argument count does not match .ze_info metadata")
 
 class IntelProgram(HCQProgram['IntelDevice']):
-  def __init__(self, dev:IntelDevice, name:str, lib:bytes, **kwargs):
+  def __init__(self, dev:IntelDevice, name:str, lib:bytes, *aux, **kwargs):
     self.image = load_zebin(lib, name) if lib.startswith(b'\x7fELF') else IntelProgramImage.decode(lib)
     if self.image.metadata.name != name: raise ValueError(f"Intel program container holds {self.image.metadata.name!r}, not {name!r}")
     self.metadata = self.image.metadata
@@ -152,7 +153,7 @@ class IntelDevice(HCQCompiled[HCQSignal]):
     self.device_id = int(device.split(":")[1]) if ":" in device else 0
     self.va_allocator = IntelVAAllocator(48, 0x1000)
     self.iface = self._select_iface()
-    super().__init__(device, IntelAllocator(self), [], functools.partial(IntelProgram, self), HCQSignal,
+    super().__init__(device, IntelAllocator(self), [IntelOpenCLRenderer], functools.partial(IntelProgram, self), HCQSignal,
                      IntelComputeQueue, None, kernargs_size=1 << 16, sigalloc_size=0x1000, arch="xe2")
 
   def device_props(self): return {"device_id": self.iface.device_id, "architecture": "xe2", "mock": True}

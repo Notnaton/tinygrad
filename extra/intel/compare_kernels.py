@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
 """Compile BMG golden kernels with Intel ocloc and inspect/compare their Zebin output."""
 from __future__ import annotations
-import argparse, base64, hashlib, json, pathlib, shutil, subprocess, sys
+import argparse, base64, hashlib, json, pathlib, subprocess, sys
 from dataclasses import asdict
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tinygrad.runtime.support.elf import elf_sections  # noqa: E402
+from tinygrad.runtime.support.compiler_intel import PINNED_INTEL_OCLOC_VERSION, find_intel_ocloc  # noqa: E402
 from tinygrad.runtime.support.intel_program import load_zebin, parse_ze_info  # noqa: E402
 
 DEFAULT_SOURCES = ROOT / "test/intel/kernels"
-PINNED_OCLOC_VERSION = "26.18.38308.1"
+PINNED_OCLOC_VERSION = PINNED_INTEL_OCLOC_VERSION
 
-def find_ocloc(requested:str) -> str|None:
-  if compiler:=shutil.which(requested): return compiler
-  if requested != "ocloc": return None
-  candidates = [*pathlib.Path("/usr/bin").glob("ocloc-*"), *pathlib.Path("/usr/local/bin").glob("ocloc-*"),
-                pathlib.Path("/opt/intel/oneapi/compiler/latest/bin/ocloc")]
-  return str(next((path for path in sorted(candidates, reverse=True) if path.is_file()), "")) or None
+def find_ocloc(requested:str) -> str|None: return find_intel_ocloc(requested)
 
 def describe_zebin(path:pathlib.Path) -> dict[str, Any]:
   raw = path.read_bytes()
