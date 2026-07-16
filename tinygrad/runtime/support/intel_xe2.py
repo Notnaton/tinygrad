@@ -78,14 +78,14 @@ SLM_SIZE_ENCODING = {0:0, 1<<10:1, 2<<10:2, 4<<10:3, 8<<10:4, 16<<10:5, 32<<10:6
                      24<<10:8, 48<<10:9, 96<<10:10, 128<<10:11, 192<<10:12, 256<<10:13, 384<<10:14}
 
 def encode_slm_size(size:int) -> int:
-  if size not in SLM_SIZE_ENCODING: raise ValueError(f"unsupported Xe2 SLM allocation size: {size}")
-  return SLM_SIZE_ENCODING[size]
+  if size < 0 or size > max(SLM_SIZE_ENCODING): raise ValueError(f"unsupported Xe2 SLM allocation size: {size}")
+  return SLM_SIZE_ENCODING[next(capacity for capacity in sorted(SLM_SIZE_ENCODING) if size <= capacity)]
 
 BARRIER_COUNT_ENCODING = {0:0, 1:1, 2:2, 4:3, 8:4, 16:5, 24:6, 32:7}
 
 def encode_barrier_count(count:int) -> int:
-  if count not in BARRIER_COUNT_ENCODING: raise ValueError(f"unsupported Xe2 barrier count: {count}")
-  return BARRIER_COUNT_ENCODING[count]
+  if count < 0 or count > max(BARRIER_COUNT_ENCODING): raise ValueError(f"unsupported Xe2 barrier count: {count}")
+  return BARRIER_COUNT_ENCODING[next(capacity for capacity in sorted(BARRIER_COUNT_ENCODING) if count <= capacity)]
 
 def _interface_descriptor(kernel_start:int, threads:int, slm_size:int, barrier_count:int) -> list[int]:
   _aligned(kernel_start, 64, "kernel start pointer")
@@ -109,7 +109,7 @@ def compute_walker(*, kernel_start:int, group_count:tuple[int, int, int], local_
                    indirect_data_start:int=0, indirect_data_length:int=0, slm_size:int=0, barrier_count:int=0,
                    post_sync_address:int|None=None, post_sync_value:int=0, mocs:int=0, inline_data:bytes=b'',
                    generate_local_ids:bool=False, emit_local:int=0) -> tuple[int, ...]:
-  if simd_size not in (16, 32): raise ValueError(f"Xe2 SIMD size must be 16 or 32, got {simd_size}")
+  if simd_size not in (8, 16, 32): raise ValueError(f"Xe2 SIMD size must be 8, 16 or 32, got {simd_size}")
   if any(x <= 0 for x in (*group_count, *local_size)): raise ValueError("Xe2 group counts and local sizes must be positive")
   for value, name in zip(group_count, ("group X", "group Y", "group Z")): _check(value, 32, name)
   if any(x > 1024 for x in local_size): raise ValueError("Xe2 local dimensions cannot exceed 1024")
@@ -122,7 +122,7 @@ def compute_walker(*, kernel_start:int, group_count:tuple[int, int, int], local_
   if emit_local not in (0, 1, 3, 7): raise ValueError(f"invalid Xe2 local ID emission mask: {emit_local:#x}")
   if emit_local and not generate_local_ids: raise ValueError("local ID emission requires local ID generation")
 
-  simd_encoding = {16:1, 32:2}[simd_size]
+  simd_encoding = {8:0, 16:1, 32:2}[simd_size]
   active_lanes = local_threads % simd_size or simd_size
   dwords = [0] * 40
   dwords[0] = 0x72080026

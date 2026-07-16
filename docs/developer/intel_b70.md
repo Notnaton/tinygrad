@@ -1,7 +1,7 @@
 # Intel Arc Pro B70 bring-up research
 
-Status: research/design plus hardware-independent Xe UAPI scaffolding; no
-hardware validation yet.
+Status: research/design plus hardware-independent Xe UAPI, program-loading,
+GPU-VA, and mock-HCQ scaffolding; no hardware validation yet.
 
 This note records the sources and implementation plan for a native tinygrad
 backend for Intel's Arc Pro B70.  The intended end state is the same layering
@@ -91,6 +91,21 @@ identification, query parsing and request builders, Xe2 encoders for
 GEM creation, VM binding, compute-queue creation, fenced execution, and batch
 termination.  The packet goldens are pinned to the compute-runtime revision
 listed under Primary sources.
+
+The second checkpoint adds an absolute-address 48-bit low-canonical GPU VA
+allocator, a strict parser for the IGC Zebin `.ze_info` subset, `.text.<kernel>`
+extraction, and a versioned tinygrad Intel program container.  Its metadata
+tracks SIMD width, GRF count/large-GRF mode, SLM, barriers, DPAS use,
+cross-thread arguments, per-thread payload size, inline payload size, and the
+actual kernel start offset.  Synthetic ELF fixtures exercise the loader without
+depending on IGC at test time.
+
+An opt-in `DEV=MOCK+INTEL` HCQ skeleton now joins these pieces.  It allocates
+mock buffers at GPU virtual addresses, lays out pointer and scalar kernel
+arguments, uploads kernel code, emits the Xe2 compute-state and walker packets,
+captures serialized batches, and models timeline completion.  Plain `INTEL`
+deliberately fails because no real interface exists yet.  The mock does not
+execute EU instructions and is not evidence that the packets run on silicon.
 
 ## Kernel binary and command-stream options
 
@@ -192,15 +207,21 @@ remain isolated because B70 is not listed as G21.
 
 ### Phase 0: hardware-independent scaffolding
 
-- Generate minimal Python bindings from `xe_drm.h` plus required generic DRM
+- [x] Generate minimal Python bindings from `xe_drm.h` plus required generic DRM
   ioctls; check struct sizes/offsets in tests.
-- Add `IntelDevice` with a mock interface and BMG PCI/product descriptors.
-- Implement query parsing, GPU VA allocation, GEM/VM-bind request building, and
+- [x] Add `IntelDevice` with a mock interface and BMG PCI/product descriptors.
+- [x] Implement query parsing, GPU VA allocation, GEM/VM-bind request building, and
   user-fence timeline objects.
-- Implement Xe2 command packet encoders with golden tests derived from Intel's
+- [x] Implement Xe2 command packet encoders with golden tests derived from Intel's
   generated definitions.
-- Define a compact program container for machine code, SIMD width, GRF count,
+- [x] Define a compact program container for machine code, SIMD width, GRF count,
   SLM size, cross-thread data, and implicit arguments.
+
+Phase 0 is a testable structural prototype.  Before calling it complete for
+hardware bring-up, add missing real-queue commands such as semaphore waits,
+validate inline cross-thread payload placement and the full command prologue
+against an IGC-produced BMG kernel, and decide which implicit `.ze_info`
+argument kinds the first tinygrad renderer needs.
 
 ### Phase 1: kernel-assisted hardware bring-up
 

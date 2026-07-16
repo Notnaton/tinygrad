@@ -62,11 +62,18 @@ class TestXe2Packets(unittest.TestCase):
   def test_validation(self):
     self.assertEqual(encode_slm_size(32 << 10), 6)
     self.assertEqual(encode_barrier_count(4), 3)
-    with self.assertRaises(ValueError): encode_slm_size(3 << 10)
-    with self.assertRaises(ValueError): encode_barrier_count(3)
+    self.assertEqual(encode_slm_size(3 << 10), 3)
+    self.assertEqual(encode_barrier_count(3), 3)
+    with self.assertRaises(ValueError): encode_slm_size(385 << 10)
+    with self.assertRaises(ValueError): encode_barrier_count(33)
     with self.assertRaisesRegex(ValueError, "aligned"): pipe_control(address=3, post_sync=1)
     with self.assertRaisesRegex(ValueError, "local ID emission"): compute_walker(
       kernel_start=0, group_count=(1, 1, 1), local_size=(1, 1, 1), simd_size=16, emit_local=1)
     with self.assertRaisesRegex(RuntimeError, "must end"): Xe2CommandBuffer().to_bytes()
+
+  def test_simd8_walker(self):
+    walker = compute_walker(kernel_start=0, group_count=(1, 1, 1), local_size=(8, 1, 1), simd_size=8)
+    self.assertEqual((walker[4] >> 17) & 0x3, 0)
+    self.assertEqual(walker[5], 0xff)
 
 if __name__ == "__main__": unittest.main()
