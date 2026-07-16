@@ -367,8 +367,10 @@ needs.
   from `DEV=INTEL`.
 - [x] Validate query, allocation/mmap, synchronized VM bind/unbind, a no-op
   batch, and complete cleanup against the stateful mock KMD.
+- [x] Add a fail-closed `XEKMD+INTEL` interface using CPU-mappable system
+  memory and synchronous submissions; plain `DEV=INTEL` remains disabled.
 - Validate the same lifecycle on an Xe2 card and capture the query/output before
-  exposing the wrapper as `XeKmdIface`.
+  enabling asynchronous submissions or VRAM allocations.
 - Compile and dispatch add/copy kernels, then implement HCQ compute/copy queues.
 - Add fault reporting using `devcoredump`, debugfs, and user-fence timeouts.
 - Validate on B580/B570 if available, then B70.
@@ -412,6 +414,19 @@ python extra/intel/query_xe.py > /tmp/b70-xe-query.json
 This records the render node, PCI device/revision, VA width and alignment,
 engine placements, and VRAM/system-memory regions.  It does not create a VM,
 allocate memory, or submit GPU commands.
+
+After reviewing that capture, the first mutating hardware test is an explicitly
+guarded no-op batch.  It creates a VM and compute queue, maps one system-memory
+GEM buffer, submits only `MI_BATCH_BUFFER_END`, waits on a user fence, and
+cleans everything up:
+
+```sh
+python extra/intel/smoke_xe.py --submit-noop > /tmp/b70-xe-noop.json
+```
+
+Do not run this command on a display-critical GPU during initial bring-up.  A
+kernel/firmware defect or an incorrect command packet can still hang or reset
+the device even though no EU kernel is dispatched.
 
 The hardware-independent Xe UAPI lifecycle can be rerun now:
 

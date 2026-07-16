@@ -28,11 +28,12 @@ class TestXeMockSubmission(unittest.TestCase):
 
     queue, instances = make_exec_queue(vm.vm_id, (XeEngine(xe_drm.DRM_XE_ENGINE_CLASS_COMPUTE, 0, 0),))
     mock.exec_queue_create(queue, instances)
-    fence_storage = ctypes.c_uint64()
-    fence = make_user_fence(ctypes.addressof(fence_storage))
+    cpu_mapping = (ctypes.c_ubyte * len(mock.bos[bo.handle])).from_buffer(mock.bos[bo.handle])
+    fence_offset = 0x100
+    fence = make_user_fence(gpu_address+fence_offset)
     execute, syncs = make_exec(queue.exec_queue_id, gpu_address, (fence,))
     mock.exec(execute, syncs)
     self.assertEqual(mock.submissions, [(queue.exec_queue_id, gpu_address)])
-    self.assertEqual(fence_storage.value, 0)
+    self.assertEqual(ctypes.c_uint64.from_address(ctypes.addressof(cpu_mapping)+fence_offset).value, 0)
 
 if __name__ == "__main__": unittest.main()

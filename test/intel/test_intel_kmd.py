@@ -1,6 +1,11 @@
-import ctypes, pathlib, struct, tempfile, unittest
+import base64, ctypes, pathlib, struct, tempfile, types, unittest
+from unittest import mock as unittest_mock
+from tinygrad.device import BufferSpec
 from tinygrad.runtime.autogen import xe_drm
+from tinygrad.helpers import Context
+from tinygrad.runtime.ops_intel import IntelComputeQueue, IntelDevice, XEKMDIface
 from tinygrad.runtime.support.intel import ARC_PRO_B70_DEVICE_ID, XeEngine, make_user_fence
+from tinygrad.runtime.support.intel_va import IntelVAAllocator
 from tinygrad.runtime.support.intel_xe2 import Xe2CommandBuffer
 from tinygrad.runtime.support.intel_kmd import XeKmdDevice, XeRenderNode, discover_xe_render_nodes
 from test.intel.mock_xe import MockXeKmd
@@ -82,12 +87,11 @@ class TestIntelKmd(unittest.TestCase):
     device.bind(vm_id, bo, gpu_address, bo.size, syncs=(make_user_fence(bind_fence_address, timeline_value=1),))
     device.wait_user_fence(bind_fence_address, 1, 1_000_000_000)
     queue_id = device.create_exec_queue(vm_id, (XeEngine(xe_drm.DRM_XE_ENGINE_CLASS_COMPUTE, 0, 0),))
-    fence_storage = ctypes.c_uint64(0)
-    fence_address = ctypes.addressof(fence_storage)
-    device.exec(queue_id, gpu_address, (make_user_fence(fence_address, timeline_value=1),))
-    device.wait_user_fence(fence_address, 1, 1_000_000_000, exec_queue_id=queue_id)
-    self.assertEqual(fence_storage.value, 1)
-    with self.assertRaises(TimeoutError): device.wait_user_fence(fence_address, 2, 0, exec_queue_id=queue_id)
+    fence_offset = 0x100
+    device.exec(queue_id, gpu_address, (make_user_fence(gpu_address+fence_offset, timeline_value=1),))
+    device.wait_user_fence(cpu_address+fence_offset, 1, 1_000_000_000, exec_queue_id=queue_id)
+    self.assertEqual(ctypes.c_uint64.from_address(cpu_address+fence_offset).value, 1)
+    with self.assertRaises(TimeoutError): device.wait_user_fence(cpu_address+fence_offset, 2, 0, exec_queue_id=queue_id)
     device.destroy_exec_queue(queue_id)
     unbind_fence_storage = ctypes.c_uint64(0)
     unbind_fence_address = ctypes.addressof(unbind_fence_storage)
@@ -96,6 +100,48 @@ class TestIntelKmd(unittest.TestCase):
     device.munmap_bo(cpu_address, bo.size)
     device.close_bo(bo)
     device.destroy_vm(vm_id)
+    self.assertEqual((mock.vms, mock.bos, mock.bindings, mock.queues), (set(), {}, {}, {}))
+
+  def test_opt_in_iface_allocates_submits_and_cleans_up(self):
+    config = struct.pack("<II5Q", 5, 0, ARC_PRO_B70_DEVICE_ID, xe_drm.DRM_XE_QUERY_CONFIG_FLAG_HAS_VRAM, 0x10000, 48, 2)
+    engines = struct.pack("<IIHHHH", 1, 0, xe_drm.DRM_XE_ENGINE_CLASS_COMPUTE, 0, 0, 0) + bytes(24)
+    memory = struct.pack("<IIHHIQQQQ", 1, 0, xe_drm.DRM_XE_MEM_REGION_CLASS_SYSMEM, 0, 0x10000, 1<<30, 0, 1<<30, 0) + bytes(48)
+    mock = MockXeKmd({xe_drm.DRM_XE_DEVICE_QUERY_CONFIG:config, xe_drm.DRM_XE_DEVICE_QUERY_ENGINES:engines,
+                      xe_drm.DRM_XE_DEVICE_QUERY_MEM_REGIONS:memory})
+    node = XeRenderNode("/dev/dri/renderD128", "/sys/class/drm/renderD128", ARC_PRO_B70_DEVICE_ID, "xe")
+    kmd = XeKmdDevice(node, MockXeFile(mock))
+    dev = types.SimpleNamespace(va_allocator=IntelVAAllocator(48, 0x10000))
+    iface = XEKMDIface(dev, 0, nodes=(node,), kmd=kmd)
+    dev.iface = iface
+    buf = iface.alloc(1)
+    self.assertEqual((buf.size, int(buf.va_addr) % 0x10000), (0x10000, 0))
+    buf.cpu_view().view(size=4, fmt='I')[0] = 0x05000000
+    iface.submit(struct.pack("<I", 0x05000000))
+    self.assertEqual(len(mock.submissions), 1)
+    iface.free(buf)
+    iface.device_fini()
+    self.assertEqual((mock.vms, mock.bos, mock.bindings, mock.queues), (set(), {}, {}, {}))
+
+  def test_opt_in_device_uses_xe_allocator_and_queue(self):
+    config = struct.pack("<II5Q", 5, 0, ARC_PRO_B70_DEVICE_ID, xe_drm.DRM_XE_QUERY_CONFIG_FLAG_HAS_VRAM, 0x10000, 48, 2)
+    engines = struct.pack("<IIHHHH", 1, 0, xe_drm.DRM_XE_ENGINE_CLASS_COMPUTE, 0, 0, 0) + bytes(24)
+    memory = struct.pack("<IIHHIQQQQ", 1, 0, xe_drm.DRM_XE_MEM_REGION_CLASS_SYSMEM, 0, 0x10000, 1<<30, 0, 1<<30, 0) + bytes(48)
+    mock = MockXeKmd({xe_drm.DRM_XE_DEVICE_QUERY_CONFIG:config, xe_drm.DRM_XE_DEVICE_QUERY_ENGINES:engines,
+                      xe_drm.DRM_XE_DEVICE_QUERY_MEM_REGIONS:memory})
+    node = XeRenderNode("/dev/dri/renderD128", "/sys/class/drm/renderD128", ARC_PRO_B70_DEVICE_ID, "xe")
+    kmd = XeKmdDevice(node, MockXeFile(mock))
+    with unittest_mock.patch("tinygrad.runtime.ops_intel.discover_xe_render_nodes", return_value=(node,)), \
+         unittest_mock.patch("tinygrad.runtime.ops_intel.XeKmdDevice", return_value=kmd), Context(DEV="XEKMD+INTEL"):
+      dev = IntelDevice("INTEL")
+      golden = pathlib.Path(__file__).parent / "goldens/ocloc-26.18.38308.1/add_f32.zebin.b64"
+      program = dev.runtime("add_f32", base64.b64decode(golden.read_bytes()))
+      bufs = tuple(dev.allocator.alloc(0x1000, BufferSpec()) for _ in range(3))
+      args = program.fill_kernargs(bufs, (32,))
+      IntelComputeQueue().exec(program, args, (1, 1, 1), (32, 1, 1)).signal(dev.timeline_signal, 1).submit(dev)
+      self.assertEqual(dev.timeline_signal.value, 1)
+      self.assertEqual(len(mock.submissions), 1)
+      self.assertEqual(dev.device_props(), {"device_id":ARC_PRO_B70_DEVICE_ID, "architecture":"xe2", "mock":False})
+      dev.finalize()
     self.assertEqual((mock.vms, mock.bos, mock.bindings, mock.queues), (set(), {}, {}, {}))
 
 if __name__ == "__main__": unittest.main()
