@@ -6,6 +6,16 @@ from tinygrad.runtime.autogen import libc
 @dataclass(frozen=True)
 class ElfSection: name:str; header:libc.Elf64_Shdr|libc.Elf32_Shdr; content:bytes # noqa: E702
 
+def elf_sections(blob:bytes) -> list[ElfSection]:
+  """Read ELF sections without constructing an image or resolving relocations."""
+  assert blob[:4] == libc.ELFMAG.encode(), "blob is not an ELF, missing magic bytes"
+  ecls = {libc.ELFCLASS32: "Elf32", libc.ELFCLASS64: "Elf64"}[blob[libc.EI_CLASS]]
+  header = getattr(libc, f"{ecls}_Ehdr").from_buffer_copy(blob)
+  section_headers = (getattr(libc, f"{ecls}_Shdr") * header.e_shnum).from_buffer_copy(blob[header.e_shoff:])
+  sh_strtab = blob[(shstrst:=section_headers[header.e_shstrndx].sh_offset):shstrst+section_headers[header.e_shstrndx].sh_size]
+  def _strtab(idx:int) -> str: return sh_strtab[idx:sh_strtab.find(b'\x00', idx)].decode('utf-8')
+  return [ElfSection(_strtab(sh.sh_name), sh, blob[sh.sh_offset:sh.sh_offset+sh.sh_size]) for sh in section_headers]
+
 def link_sym(sym:str, libs:list[str]) -> int:
   for lib in libs:
     try: return unwrap(ctypes.cast(getattr(ctypes.CDLL(ctypes.util.find_library(lib)), sym), ctypes.c_void_p).value)
@@ -21,7 +31,7 @@ def elf_loader(blob:bytes, force_section_align:int=1, link_libs:list[str]|None=N
   header = getattr(libc, f"{ecls}_Ehdr").from_buffer_copy(blob)
   section_headers = (getattr(libc, f"{ecls}_Shdr") * header.e_shnum).from_buffer_copy(blob[header.e_shoff:])
   sh_strtab = blob[(shstrst:=section_headers[header.e_shstrndx].sh_offset):shstrst+section_headers[header.e_shstrndx].sh_size]
-  sections = [ElfSection(_strtab(sh_strtab, sh.sh_name), sh, blob[sh.sh_offset:sh.sh_offset+sh.sh_size]) for sh in section_headers]
+  sections = elf_sections(blob)
 
   def _to_carray(sh, ctype): return (ctype * (sh.header.sh_size // sh.header.sh_entsize)).from_buffer_copy(sh.content)
   rel = [(sh, sh.name[4:], _to_carray(sh, getattr(libc, f"{ecls}_Rel"))) for sh in sections if sh.header.sh_type == libc.SHT_REL]

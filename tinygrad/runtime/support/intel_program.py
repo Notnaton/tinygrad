@@ -2,7 +2,7 @@ from __future__ import annotations
 import json, struct
 from dataclasses import asdict, dataclass
 from typing import Any
-from tinygrad.runtime.support.elf import elf_loader
+from tinygrad.runtime.support.elf import elf_sections
 
 INTEL_PROGRAM_MAGIC = b"TGXE2\x00\x01\x00"
 
@@ -18,7 +18,8 @@ class IntelKernelArg:
 
   def __post_init__(self):
     if self.offset < 0: raise ValueError(f"invalid Intel kernel argument offset: {self.offset}")
-    if self.size <= 0: raise ValueError(f"invalid Intel kernel argument size: {self.size}")
+    # IGC emits zero-sized records for stateful arguments paired with a stateless/bindless payload record.
+    if self.size < 0: raise ValueError(f"invalid Intel kernel argument size: {self.size}")
     if self.arg_index < -1: raise ValueError(f"invalid Intel kernel argument index: {self.arg_index}")
 
 @dataclass(frozen=True)
@@ -44,7 +45,6 @@ class IntelKernelMetadata:
            self.actual_kernel_start_offset, self.per_thread_payload_size) < 0: raise ValueError("Intel kernel metadata values cannot be negative")
     if len(self.required_work_group_size) != 3 or min(self.required_work_group_size) < 0:
       raise ValueError("invalid Intel required work-group size")
-    if self.inline_data_payload_size > 32: raise ValueError("Intel inline data payload exceeds COMPUTE_WALKER capacity")
 
   @property
   def cross_thread_data_size(self) -> int:
@@ -150,7 +150,7 @@ def parse_ze_info(text:str) -> tuple[IntelKernelMetadata, ...]:
   return tuple(decoded)
 
 def load_zebin(blob:bytes, kernel_name:str) -> IntelProgramImage:
-  _, sections, _ = elf_loader(blob)
+  sections = elf_sections(blob)
   ze_info = next((section.content for section in sections if section.name == ".ze_info"), None)
   if ze_info is None: raise ValueError("Zebin has no .ze_info section")
   metadata = next((meta for meta in parse_ze_info(ze_info.rstrip(b'\0').decode()) if meta.name == kernel_name), None)

@@ -36,6 +36,7 @@ class IntelArgsState(HCQArgsState['IntelProgram']):
     buf.cpu_view().view(fmt='B')[:] = bytes(buf.size)
     buf_index, val_index = 0, 0
     for arg in prg.metadata.payload_arguments:
+      if arg.size == 0: continue  # stateful descriptor record; the paired stateless/bindless record carries the payload
       if arg.arg_type == "arg_bypointer":
         if buf_index >= len(bufs) or arg.size != 8: raise ValueError(f"unsupported Intel pointer argument {arg.arg_index}")
         self.bind_sints_to_buf(bufs[buf_index].va_addr, buf=buf, fmt='Q', offset=arg.offset)

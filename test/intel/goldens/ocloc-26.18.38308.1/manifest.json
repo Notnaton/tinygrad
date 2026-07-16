@@ -1,0 +1,312 @@
+{
+  "binaries": [
+    {
+      "file": "add_f32.bin",
+      "kernels": [
+        {
+          "code_sha256": "1884646dd1c9145d2421f0194ac7b983f6d71b5fff44c1bffaded35dfa0d89b3",
+          "code_size": 896,
+          "metadata": {
+            "actual_kernel_start_offset": 0,
+            "barrier_count": 0,
+            "grf_count": 128,
+            "has_dpas": false,
+            "inline_data_payload_size": 32,
+            "name": "add_f32",
+            "payload_arguments": [
+              {
+                "access_type": "",
+                "addrmode": "",
+                "addrspace": "",
+                "arg_index": -1,
+                "arg_type": "global_id_offset",
+                "offset": 0,
+                "size": 12
+              },
+              {
+                "access_type": "",
+                "addrmode": "",
+                "addrspace": "",
+                "arg_index": -1,
+                "arg_type": "enqueued_local_size",
+                "offset": 12,
+                "size": 12
+              },
+              {
+                "access_type": "readonly",
+                "addrmode": "stateless",
+                "addrspace": "global",
+                "arg_index": 0,
+                "arg_type": "arg_bypointer",
+                "offset": 24,
+                "size": 8
+              },
+              {
+                "access_type": "readonly",
+                "addrmode": "stateless",
+                "addrspace": "global",
+                "arg_index": 1,
+                "arg_type": "arg_bypointer",
+                "offset": 32,
+                "size": 8
+              },
+              {
+                "access_type": "readwrite",
+                "addrmode": "stateless",
+                "addrspace": "global",
+                "arg_index": 2,
+                "arg_type": "arg_bypointer",
+                "offset": 40,
+                "size": 8
+              },
+              {
+                "access_type": "",
+                "addrmode": "",
+                "addrspace": "",
+                "arg_index": 3,
+                "arg_type": "arg_byvalue",
+                "offset": 48,
+                "size": 4
+              }
+            ],
+            "per_thread_payload_size": 64,
+            "private_size": 0,
+            "required_work_group_size": [
+              0,
+              0,
+              0
+            ],
+            "simd_size": 32,
+            "slm_size": 0,
+            "spill_size": 0
+          },
+          "name": "add_f32"
+        }
+      ],
+      "zebin_sha256": "02bb6ce1798a4a08045089eb7623ea0c1da70a67cdee86f4deb4a2f86515fc78",
+      "zebin_size": 4528
+    },
+    {
+      "file": "copy_u8.bin",
+      "kernels": [
+        {
+          "code_sha256": "6ce3138ea271d53886c2a78307fc9bca0dca1973fc3cd0062ca7175d104e3292",
+          "code_size": 832,
+          "metadata": {
+            "actual_kernel_start_offset": 0,
+            "barrier_count": 0,
+            "grf_count": 128,
+            "has_dpas": false,
+            "inline_data_payload_size": 32,
+            "name": "copy_u8",
+            "payload_arguments": [
+              {
+                "access_type": "",
+                "addrmode": "",
+                "addrspace": "",
+                "arg_index": -1,
+                "arg_type": "global_id_offset",
+                "offset": 0,
+                "size": 12
+              },
+              {
+                "access_type": "",
+                "addrmode": "",
+                "addrspace": "",
+                "arg_index": -1,
+                "arg_type": "enqueued_local_size",
+                "offset": 12,
+                "size": 12
+              },
+              {
+                "access_type": "readonly",
+                "addrmode": "stateless",
+                "addrspace": "global",
+                "arg_index": 0,
+                "arg_type": "arg_bypointer",
+                "offset": 24,
+                "size": 8
+              },
+              {
+                "access_type": "readwrite",
+                "addrmode": "stateless",
+                "addrspace": "global",
+                "arg_index": 1,
+                "arg_type": "arg_bypointer",
+                "offset": 32,
+                "size": 8
+              },
+              {
+                "access_type": "",
+                "addrmode": "",
+                "addrspace": "",
+                "arg_index": 2,
+                "arg_type": "arg_byvalue",
+                "offset": 40,
+                "size": 4
+              }
+            ],
+            "per_thread_payload_size": 64,
+            "private_size": 0,
+            "required_work_group_size": [
+              0,
+              0,
+              0
+            ],
+            "simd_size": 32,
+            "slm_size": 0,
+            "spill_size": 0
+          },
+          "name": "copy_u8"
+        }
+      ],
+      "zebin_sha256": "8df84b71da2ec13e93bc4f4cedc14e08d3acf15a7d7aaf2d475415bf7142ce9d",
+      "zebin_size": 4056
+    },
+    {
+      "file": "matmul_f32.bin",
+      "kernels": [
+        {
+          "code_sha256": "b846feb9a7eb48e7326166a7c76f4aef27e81a0f655ec1cdd270a1e021084334",
+          "code_size": 1792,
+          "metadata": {
+            "actual_kernel_start_offset": 0,
+            "barrier_count": 0,
+            "grf_count": 128,
+            "has_dpas": false,
+            "inline_data_payload_size": 32,
+            "name": "matmul_f32",
+            "payload_arguments": [
+              {
+                "access_type": "",
+                "addrmode": "",
+                "addrspace": "",
+                "arg_index": -1,
+                "arg_type": "global_id_offset",
+                "offset": 0,
+                "size": 12
+              },
+              {
+                "access_type": "",
+                "addrmode": "",
+                "addrspace": "",
+                "arg_index": -1,
+                "arg_type": "enqueued_local_size",
+                "offset": 12,
+                "size": 12
+              },
+              {
+                "access_type": "readonly",
+                "addrmode": "stateless",
+                "addrspace": "global",
+                "arg_index": 0,
+                "arg_type": "arg_bypointer",
+                "offset": 24,
+                "size": 8
+              },
+              {
+                "access_type": "readonly",
+                "addrmode": "stateless",
+                "addrspace": "global",
+                "arg_index": 1,
+                "arg_type": "arg_bypointer",
+                "offset": 32,
+                "size": 8
+              },
+              {
+                "access_type": "readwrite",
+                "addrmode": "stateless",
+                "addrspace": "global",
+                "arg_index": 2,
+                "arg_type": "arg_bypointer",
+                "offset": 40,
+                "size": 8
+              },
+              {
+                "access_type": "",
+                "addrmode": "",
+                "addrspace": "",
+                "arg_index": 3,
+                "arg_type": "arg_byvalue",
+                "offset": 48,
+                "size": 4
+              }
+            ],
+            "per_thread_payload_size": 128,
+            "private_size": 0,
+            "required_work_group_size": [
+              0,
+              0,
+              0
+            ],
+            "simd_size": 32,
+            "slm_size": 0,
+            "spill_size": 0
+          },
+          "name": "matmul_f32"
+        }
+      ],
+      "zebin_sha256": "632525b3eb318c20847a170eb6268c10aa669b1040078d97e7b40ef65907bbd2",
+      "zebin_size": 5408
+    }
+  ],
+  "commands": [
+    [
+      "ocloc",
+      "compile",
+      "-file",
+      "test/intel/kernels/add_f32.cl",
+      "-device",
+      "bmg",
+      "-output",
+      "add_f32",
+      "-out_dir",
+      "<OUTPUT>",
+      "-output_no_suffix",
+      "-exclude_ir",
+      "--format",
+      "zebin",
+      "-options",
+      "-cl-std=CL2.0"
+    ],
+    [
+      "ocloc",
+      "compile",
+      "-file",
+      "test/intel/kernels/copy_u8.cl",
+      "-device",
+      "bmg",
+      "-output",
+      "copy_u8",
+      "-out_dir",
+      "<OUTPUT>",
+      "-output_no_suffix",
+      "-exclude_ir",
+      "--format",
+      "zebin",
+      "-options",
+      "-cl-std=CL2.0"
+    ],
+    [
+      "ocloc",
+      "compile",
+      "-file",
+      "test/intel/kernels/matmul_f32.cl",
+      "-device",
+      "bmg",
+      "-output",
+      "matmul_f32",
+      "-out_dir",
+      "<OUTPUT>",
+      "-output_no_suffix",
+      "-exclude_ir",
+      "--format",
+      "zebin",
+      "-options",
+      "-cl-std=CL2.0"
+    ]
+  ],
+  "device": "bmg",
+  "ocloc_version": "26.18.38308.1",
+  "schema": 1
+}

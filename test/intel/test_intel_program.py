@@ -1,4 +1,4 @@
-import struct, unittest
+import pathlib, struct, unittest
 from tinygrad.runtime.support.intel_program import IntelProgramImage, load_zebin, parse_ze_info
 
 ZE_INFO = """---
@@ -57,6 +57,16 @@ def make_zebin(ze_info:bytes, kernel:bytes) -> bytes:
   return header + b"".join(pieces) + b"".join(sections)
 
 class TestIntelProgram(unittest.TestCase):
+  def test_compute_runtime_metadata_fixture(self):
+    fixture = pathlib.Path(__file__).parent / "fixtures/compute_runtime_test.ze_info"
+    meta, = parse_ze_info(fixture.read_text())
+    self.assertEqual((meta.name, meta.simd_size, meta.grf_count), ("test", 32, 128))
+    self.assertEqual((meta.inline_data_payload_size, meta.per_thread_payload_size), (32, 192))
+    self.assertEqual(meta.cross_thread_data_size, 92)
+    stateful, stateless = meta.payload_arguments[2:4]
+    self.assertEqual((stateful.size, stateful.addrmode), (0, "stateful"))
+    self.assertEqual((stateless.size, stateless.addrmode), (8, "stateless"))
+
   def test_parse_ze_info(self):
     meta, = parse_ze_info(ZE_INFO)
     self.assertEqual((meta.name, meta.simd_size, meta.grf_count), ("add", 16, 256))

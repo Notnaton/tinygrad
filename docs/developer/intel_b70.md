@@ -130,6 +130,45 @@ The first kernel should be a hand-inspected SIMD kernel doing one global load,
 one add, and one global store.  XMX support should come only after scalar/vector
 dispatch, barriers, local memory, and copy queues are stable.
 
+### Golden kernel comparison
+
+The branch includes small OpenCL C add, copy, and naïve matrix-multiply kernels
+under `test/intel/kernels/`.  They are inputs to Intel IGC, not claimed native
+tinygrad Xe2 output.  With the compute runtime's `ocloc` installed, generate
+BMG Zebins and a reproducibility manifest with:
+
+```sh
+python extra/intel/compare_kernels.py compile \
+  --output /tmp/bmg-goldens --manifest /tmp/bmg-goldens.json
+```
+
+The command invokes `ocloc compile -device bmg --format zebin`, then records the
+full Zebin hash, extracted `.text.<kernel>` size/hash, and decoded `.ze_info`
+metadata for every kernel.  `inspect` produces the same description for an
+existing Zebin, while `compare EXPECTED.json ACTUAL.json` reports field-level
+differences.  This lets us compare compiler versions, compiler options, BMG
+steppings, and eventually a tinygrad Xe2 assembler without pretending that
+equal source code implies equal machine code.
+
+The unit suite also parses a metadata fixture copied from Intel compute-runtime
+at the pinned revision.  It covers real IGC conventions including paired
+zero-sized stateful and eight-byte stateless argument records.
+
+Reference BMG Zebins and IGA disassemblies are checked in under
+`test/intel/goldens/ocloc-26.18.38308.1/`.  They were produced without a GPU by
+`intel-ocloc` 26.18.38308.1 and IGC 2.34.4 from Intel's Ubuntu packages.  The
+add, copy, and naïve matmul kernel texts are respectively 896, 832, and 1,792
+bytes.  All three compile as SIMD32 with 128 GRFs and a 32-byte inline payload;
+matmul requires 128 bytes of per-thread payload versus 64 bytes for add/copy.
+The manifest pins complete-Zebin and extracted-code hashes so later compiler or
+tinygrad output can be compared exactly.
+
+These Zebins also contain Intel relocation records such as
+`__INTEL_PATCH_CROSS_THREAD_OFFSET_OFF_R0`.  The loader now reads sections
+without incorrectly resolving them as host symbols, but applying those Intel
+patch relocations is still required before a real dispatch.  Tests therefore
+compare and inspect the genuine code while execution remains fail-closed.
+
 ## Details from `llm-scaler` and `compute-runtime`
 
 Intel's `llm-scaler` is useful as a workload and compiler-tuning reference, but
